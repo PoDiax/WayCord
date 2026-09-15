@@ -18,13 +18,13 @@
 </div>
 
 ## Table of Contents
-- [Why WayCord?](#-why-waycord)
-- [Features](#-features)
-- [Discord Client Setup](#-discord-client-setup)
-- [Installation](#-installation)
-- [Controls & Keybindings](#-controls--keybindings)
-- [Configuration](#-configuration)
-- [License](#-license)
+- [Why WayCord?](#why-waycord)
+- [Features](#features)
+- [Discord Client Setup](#discord-client-setup)
+- [Installation](#installation)
+- [Controls & Keybindings](#controls--keybindings)
+- [Configuration](#configuration)
+- [License](#license)
 
 ---
 
