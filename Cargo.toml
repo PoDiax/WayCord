@@ -1,0 +1,39 @@
+[package]
+name = "waycord"
+version = "0.1.0"
+edition = "2024"
+default-run = "waycord"
+description = "Lightweight, transparent Discord voice overlay for Linux"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/podiax/waycord"
+readme = "README.md"
+keywords = ["discord", "overlay", "voice", "linux", "gaming"]
+categories = ["games", "gui"]
+
+[lib]
+name = "waycord"
+path = "src/lib.rs"
+
+[[bin]]
+name = "waycord"
+path = "src/bin/overlay.rs"
+
+[[bin]]
+name = "preview"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+egui = "0.36"
+egui_glow = { version = "0.36", features = ["winit"] }
+egui-winit = { version = "0.36", default-features = false, features = ["clipboard", "links", "x11"] }
+glutin = { version = "0.32", default-features = false, features = ["x11", "egl"] }
+glutin-winit = { version = "0.5", default-features = false, features = ["x11", "egl"] }
+winit = { version = "0.30", default-features = false, features = ["x11"] }
+x11rb = { version = "0.13", features = ["allow-unsafe-code"] }
+tungstenite = "0.26"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+ureq = { version = "2.12", default-features = false, features = ["tls"] }
+ksni = { version = "0.3.6", features = ["blocking"] }
