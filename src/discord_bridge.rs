@@ -191,15 +191,21 @@ impl DiscordBridge {
         install_universal_bridge();
 
         thread::spawn(move || {
-            let listener = match TcpListener::bind("127.0.0.1:9876") {
+            let listener = match TcpListener::bind("[::]:9876") {
                 Ok(l) => {
-                    println!("Discord Voice Bridge WebSocket listening on ws://127.0.0.1:9876");
+                    println!("Discord Voice Bridge WebSocket listening on [::]:9876 (dual-stack IPv4/IPv6)");
                     l
                 }
-                Err(err) => {
-                    eprintln!("Failed to bind WebSocket listener on port 9876: {err}");
-                    return;
-                }
+                Err(_) => match TcpListener::bind("127.0.0.1:9876") {
+                    Ok(l) => {
+                        println!("Discord Voice Bridge WebSocket listening on ws://127.0.0.1:9876");
+                        l
+                    }
+                    Err(err) => {
+                        eprintln!("Failed to bind WebSocket listener on port 9876: {err}");
+                        return;
+                    }
+                },
             };
 
             for stream in listener.incoming() {
@@ -208,20 +214,24 @@ impl DiscordBridge {
                     Err(_) => continue,
                 };
 
-                let _ = stream.set_read_timeout(None);
-                let mut ws = match tungstenite::accept(stream) {
-                    Ok(ws) => {
-                        println!("🟢 Connected to Discord Voice client!");
-                        if let Ok(mut lock) = state_clone.lock() {
-                            lock.connected = true;
+                let state_clone = state_clone.clone();
+                let cache_clone = cache_clone.clone();
+
+                thread::spawn(move || {
+                    let _ = stream.set_read_timeout(None);
+                    let mut ws = match tungstenite::accept(stream) {
+                        Ok(ws) => {
+                            println!("🟢 Connected to Discord Voice client!");
+                            if let Ok(mut lock) = state_clone.lock() {
+                                lock.connected = true;
+                            }
+                            ws
                         }
-                        ws
-                    }
-                    Err(e) => {
-                        eprintln!("WebSocket accept error: {e}");
-                        continue;
-                    }
-                };
+                        Err(e) => {
+                            eprintln!("WebSocket accept error: {e}");
+                            return;
+                        }
+                    };
 
                 loop {
                     match ws.read() {
@@ -307,8 +317,9 @@ impl DiscordBridge {
                         _ => {}
                     }
                 }
-            }
-        });
+            });
+        }
+    });
 
         Self {
             state,
@@ -391,11 +402,16 @@ const CLIENT_HOOK_JS: &str = r#"
             return null;
         }
 
+        const hosts = ["127.0.0.1:9876", "localhost:9876"];
+        let hostIdx = 0;
+
         function connect() {
             try {
-                ws = new WebSocket("ws://127.0.0.1:9876");
+                const target = hosts[hostIdx % hosts.length];
+                hostIdx++;
+                ws = new WebSocket("ws://" + target);
                 ws.onopen = () => {
-                    console.log("[WayCord Client] Connected to overlay server!");
+                    console.log("[WayCord Client] Connected to overlay server (" + target + ")!");
                     sendFullState();
                 };
                 ws.onclose = () => {
@@ -593,33 +609,10 @@ pub fn install_legcord_user_plugin(legcord_dir: &Path) {
   "name": "WayCord Voice Overlay",
   "version": "1.0.0",
   "description": "Discord Voice Overlay Bridge for WayCord",
-  "main": "main.js",
   "renderer": "renderer.js"
 }
 "#;
     let _ = std::fs::write(&manifest_path, manifest_content);
-
-    let main_path = plugin_dir.join("main.js");
-    let main_content = r#"import { session } from "electron";
-
-export function activate(api) {
-    if (api?.logger?.log) {
-        api.logger.log("WayCord main process plugin active - stripping CSP for local overlay");
-    }
-    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-        const headers = details.responseHeaders || {};
-        for (const key of Object.keys(headers)) {
-            if (key.toLowerCase().startsWith("content-security-policy")) {
-                delete headers[key];
-            }
-        }
-        callback({ cancel: false, responseHeaders: headers });
-    });
-}
-
-export default { activate };
-"#;
-    let _ = std::fs::write(&main_path, main_content);
 
     let renderer_path = plugin_dir.join("renderer.js");
     let mut renderer_content = String::from("// === WAYCORD LEGCORD PLUGIN ===\n");
@@ -629,20 +622,32 @@ export default { activate };
         println!("✨ WayCord plugin installed into Legcord at {}!", plugin_dir.display());
     }
 
-    // Automatically enable plugin in storage/settings.json
+    // Automatically enable plugin and bypass proxy for localhost in storage/settings.json
     let settings_path = legcord_dir.join("storage/settings.json");
     if settings_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&settings_path) {
             if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(obj) = json.as_object_mut() {
+                    let mut modified = false;
                     let plugin_states = obj.entry("pluginStates").or_insert_with(|| serde_json::json!({}));
                     if let Some(states_obj) = plugin_states.as_object_mut() {
                         if states_obj.get("waycord") != Some(&serde_json::Value::Bool(true)) {
                             states_obj.insert("waycord".to_string(), serde_json::Value::Bool(true));
-                            if let Ok(new_json) = serde_json::to_string_pretty(&json) {
-                                let _ = std::fs::write(&settings_path, new_json);
-                                println!("✨ Enabled WayCord plugin in Legcord settings!");
+                            modified = true;
+                            println!("✨ Enabled WayCord plugin in Legcord settings!");
+                        }
+                    }
+                    if let Some(bypass) = obj.get_mut("proxyBypassRules") {
+                        if let Some(s) = bypass.as_str() {
+                            if !s.contains("127.0.0.1") {
+                                *bypass = serde_json::Value::String(format!("{s},127.0.0.1,localhost"));
+                                modified = true;
                             }
+                        }
+                    }
+                    if modified {
+                        if let Ok(new_json) = serde_json::to_string_pretty(&json) {
+                            let _ = std::fs::write(&settings_path, new_json);
                         }
                     }
                 }
