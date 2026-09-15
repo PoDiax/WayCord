@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     net::TcpListener,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
 };
@@ -55,6 +55,8 @@ pub struct DiscordClientInfo {
     pub vesktop_installed: bool,
     pub vesktop_running: bool,
     pub vencord_installed: bool,
+    pub legcord_installed: bool,
+    pub legcord_running: bool,
 }
 
 impl DiscordClientInfo {
@@ -89,8 +91,17 @@ impl DiscordClientInfo {
         ];
         let vencord_installed = vencord_dirs.iter().any(|p| p.exists());
 
-        let stock_discord_running = is_process_running(&["discord", "discordcanary", "discord-ptb"], &["vesktop"]);
+        let legcord_dirs = [
+            home_path.join(".config/legcord"),
+            home_path.join(".var/app/app.legcord.Legcord"),
+        ];
+        let legcord_installed = legcord_dirs.iter().any(|p| p.exists())
+            || std::path::Path::new("/usr/bin/legcord").exists()
+            || std::path::Path::new("/usr/lib/legcord").exists();
+
+        let stock_discord_running = is_process_running(&["discord", "discordcanary", "discord-ptb"], &["vesktop", "legcord"]);
         let vesktop_running = is_process_running(&["vesktop"], &[]);
+        let legcord_running = is_process_running(&["legcord"], &[]);
 
         Self {
             stock_discord_installed,
@@ -98,15 +109,17 @@ impl DiscordClientInfo {
             vesktop_installed,
             vesktop_running,
             vencord_installed,
+            legcord_installed,
+            legcord_running,
         }
     }
 
     pub fn is_stock_discord_active_or_only_client(&self) -> bool {
-        self.stock_discord_running || (!self.vesktop_running && self.stock_discord_installed)
+        self.stock_discord_running || (!self.vesktop_running && !self.legcord_running && self.stock_discord_installed)
     }
 
     pub fn should_prompt_for_vesktop(&self, connected: bool) -> bool {
-        if connected {
+        if connected || self.vesktop_running || self.legcord_running || self.legcord_installed {
             return false;
         }
         self.stock_discord_running || self.stock_discord_installed
@@ -315,26 +328,40 @@ pub fn get_initials(name: &str) -> String {
     }
 }
 
-// Universal client script that integrates directly with Vencord / Vesktop
+// Universal client script that integrates directly with Vencord / Equicord / Shelter / Vesktop / Legcord
 const CLIENT_HOOK_JS: &str = r#"
 (() => {
     if (window.__waycordBridge_v1) return;
     window.__waycordBridge_v1 = true;
-    console.log("[WayCord Client] Vencord/Vesktop bridge hook active");
+    console.log("[WayCord Client] Voice overlay bridge hook active");
 
     function getDiscordModules() {
-        if (window.Vencord?.Webpack?.Common?.FluxDispatcher &&
-            window.Vencord?.Webpack?.Common?.VoiceStateStore &&
-            window.Vencord?.Webpack?.Common?.SelectedChannelStore &&
-            window.Vencord?.Webpack?.Common?.ChannelStore &&
-            window.Vencord?.Webpack?.Common?.UserStore) {
+        const vc = window.Vencord || window.Equicord;
+        if (vc?.Webpack?.Common?.FluxDispatcher &&
+            vc?.Webpack?.Common?.VoiceStateStore &&
+            vc?.Webpack?.Common?.SelectedChannelStore &&
+            vc?.Webpack?.Common?.ChannelStore &&
+            vc?.Webpack?.Common?.UserStore) {
             return {
-                Dispatcher: window.Vencord.Webpack.Common.FluxDispatcher,
-                VoiceStateStore: window.Vencord.Webpack.Common.VoiceStateStore,
-                SelectedChannelStore: window.Vencord.Webpack.Common.SelectedChannelStore,
-                ChannelStore: window.Vencord.Webpack.Common.ChannelStore,
-                UserStore: window.Vencord.Webpack.Common.UserStore,
+                Dispatcher: vc.Webpack.Common.FluxDispatcher,
+                VoiceStateStore: vc.Webpack.Common.VoiceStateStore,
+                SelectedChannelStore: vc.Webpack.Common.SelectedChannelStore,
+                ChannelStore: vc.Webpack.Common.ChannelStore,
+                UserStore: vc.Webpack.Common.UserStore,
             };
+        }
+
+        if (window.shelter?.flux?.dispatcher && window.shelter?.flux?.stores) {
+            const stores = typeof window.shelter.flux.stores === 'function' ? window.shelter.flux.stores() : window.shelter.flux.stores;
+            if (stores?.VoiceStateStore && stores?.SelectedChannelStore && stores?.ChannelStore && stores?.UserStore) {
+                return {
+                    Dispatcher: window.shelter.flux.dispatcher,
+                    VoiceStateStore: stores.VoiceStateStore,
+                    SelectedChannelStore: stores.SelectedChannelStore,
+                    ChannelStore: stores.ChannelStore,
+                    UserStore: stores.UserStore,
+                };
+            }
         }
         return null;
     }
@@ -347,7 +374,7 @@ const CLIENT_HOOK_JS: &str = r#"
         }
 
         const { Dispatcher, VoiceStateStore, SelectedChannelStore, ChannelStore, UserStore } = modules;
-        console.log("[WayCord Client] Connected to Vencord Flux modules successfully!");
+        console.log("[WayCord Client] Connected to Discord Flux modules successfully!");
 
         let ws = null;
         let reconnectTimer = null;
@@ -505,7 +532,13 @@ pub fn install_universal_bridge() {
         home_path.join(".var/app/dev.vencord.Vesktop/config/vesktop/sessionData/vencordFiles/vencordDesktopRenderer.js"),
         home_path.join(".config/Vencord/dist/renderer.js"),
         home_path.join(".local/share/vencord/dist/renderer.js"),
+        // Legcord mods (Equicord, Vencord, Shelter)
+        home_path.join(".config/legcord/equicord.js"),
         home_path.join(".config/legcord/vencord.js"),
+        home_path.join(".config/legcord/shelter.js"),
+        home_path.join(".var/app/app.legcord.Legcord/config/legcord/equicord.js"),
+        home_path.join(".var/app/app.legcord.Legcord/config/legcord/vencord.js"),
+        home_path.join(".var/app/app.legcord.Legcord/config/legcord/shelter.js"),
     ];
 
     for path in targets {
@@ -529,13 +562,69 @@ pub fn install_universal_bridge() {
         }
     }
 
+    // Also install as native Legcord User Plugin
+    install_legcord_user_plugin(&home_path.join(".config/legcord"));
+    install_legcord_user_plugin(&home_path.join(".var/app/app.legcord.Legcord/config/legcord"));
+
     cleanup_stock_discord(&home_path);
 
     let client_info = DiscordClientInfo::detect();
-    if client_info.stock_discord_running || (client_info.stock_discord_installed && !client_info.vesktop_installed) {
+    if client_info.stock_discord_running || (client_info.stock_discord_installed && !client_info.vesktop_installed && !client_info.legcord_installed) {
         println!("💡 Standard Discord client detected: Stock Discord does not support third-party overlay bridges.");
-        println!("   ⭐ Recommended: Install Vesktop (https://vesktop.dev)");
+        println!("   ⭐ Recommended: Install Vesktop (https://vesktop.dev) or Legcord (https://legcord.app)");
         println!("   🔧 Or patch Discord with Vencord: sh -c \"$(curl -sS https://raw.githubusercontent.com/Vendicated/VencordInstaller/main/install.sh)\"");
+    }
+}
+
+pub fn install_legcord_user_plugin(legcord_dir: &Path) {
+    if !legcord_dir.exists() {
+        return;
+    }
+
+    let plugin_dir = legcord_dir.join("plugins/waycord");
+    if let Err(e) = std::fs::create_dir_all(&plugin_dir) {
+        eprintln!("Failed to create Legcord plugin dir: {e}");
+        return;
+    }
+
+    let manifest_path = plugin_dir.join("manifest.json");
+    let manifest_content = r#"{
+  "id": "waycord",
+  "name": "WayCord Voice Overlay",
+  "version": "1.0.0",
+  "description": "Discord Voice Overlay Bridge for WayCord",
+  "renderer": "renderer.js"
+}
+"#;
+    let _ = std::fs::write(&manifest_path, manifest_content);
+
+    let renderer_path = plugin_dir.join("renderer.js");
+    let mut renderer_content = String::from("// === WAYCORD LEGCORD PLUGIN ===\n");
+    renderer_content.push_str(CLIENT_HOOK_JS);
+    renderer_content.push_str("\n\nexport const activate = () => {};\nexport default { activate };\n");
+    if std::fs::write(&renderer_path, renderer_content).is_ok() {
+        println!("✨ WayCord plugin installed into Legcord at {}!", plugin_dir.display());
+    }
+
+    // Automatically enable plugin in storage/settings.json
+    let settings_path = legcord_dir.join("storage/settings.json");
+    if settings_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&settings_path) {
+            if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(obj) = json.as_object_mut() {
+                    let plugin_states = obj.entry("pluginStates").or_insert_with(|| serde_json::json!({}));
+                    if let Some(states_obj) = plugin_states.as_object_mut() {
+                        if states_obj.get("waycord") != Some(&serde_json::Value::Bool(true)) {
+                            states_obj.insert("waycord".to_string(), serde_json::Value::Bool(true));
+                            if let Ok(new_json) = serde_json::to_string_pretty(&json) {
+                                let _ = std::fs::write(&settings_path, new_json);
+                                println!("✨ Enabled WayCord plugin in Legcord settings!");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
