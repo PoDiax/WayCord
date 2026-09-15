@@ -1,11 +1,11 @@
 [Desktop Entry]
 Name=WayCord
 GenericName=Discord Voice Overlay
-Comment=Lightweight, Discord overlay for Linux
+Comment=Lightweight Discord voice overlay for Linux
 Exec=waycord
 Icon=waycord
 Terminal=false
 Type=Application
-Categories=Utility;AudioVideo;Audio;Game;
+Categories=AudioVideo;Audio;
 Keywords=discord;overlay;voice;hud;gaming;vesktop;
 StartupNotify=false
