@@ -68,7 +68,7 @@ Stock official Discord does not support third-party overlay bridges directly. To
 ### 2. Official Discord + Vencord
 - If you prefer the standard Discord client, run the official Vencord installer script:
   ```bash
-  sh -c "$(curl -sS https://raw.githubusercontent.com/Vendicated/VencordInstaller/main/install.sh"
+  sh -c "$(curl -sS https://raw.githubusercontent.com/Vendicated/VencordInstaller/main/install.sh)"
   ```
 * Select your installed Discord version and choose **Install**.
 * WayCord will automatically hook into Vencord's renderer and connect on startup.
@@ -81,13 +81,21 @@ Stock official Discord does not support third-party overlay bridges directly. To
 
 ### Arch Linux (AUR)
 
-WayCord is available on the AUR for easy installation and updates:
+WayCord is available on the AUR:
 
 ```bash
+# Pre-compiled binary (recommended for fast installs):
+yay -S waycord-bin
+
+# Or build from source (VCS package):
 yay -S waycord-git
-# or
-paru -S waycord-git
 ```
+
+### GitHub Releases (Pre-compiled Tarball)
+
+Pre-built binaries with desktop integration files and checksums are automatically generated for every release:
+- Download the latest `waycord-v*-x86_64-unknown-linux-gnu.tar.gz` from [GitHub Releases](https://github.com/podiax/waycord/releases).
+- Extract and run `./waycord`.
 
 ### Build from Source
 

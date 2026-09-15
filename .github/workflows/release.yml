@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g. v0.1.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build Binary Release
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev \
+            libfontconfig1-dev \
+            pkg-config \
+            libssl-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: |
+          cargo build --release --bin waycord
+
+      - name: Package release assets
+        id: package
+        run: |
+          # Resolve tag name
+          if [ -n "${{ inputs.tag_name }}" ]; then
+            TAG="${{ inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+            TAG="v${VERSION}"
+          fi
+
+          ARCHIVE_BASENAME="waycord-${TAG}-x86_64-unknown-linux-gnu"
+          STAGE_DIR="/tmp/${ARCHIVE_BASENAME}"
+          rm -rf "${STAGE_DIR}"
+          mkdir -p "${STAGE_DIR}/assets"
+
+          # Copy release binary and required desktop integration files
+          cp "target/release/waycord" "${STAGE_DIR}/"
+          cp "assets/waycord.desktop" "${STAGE_DIR}/assets/"
+          cp "assets/waycord.png" "${STAGE_DIR}/assets/"
+          cp "assets/waycord.svg" "${STAGE_DIR}/assets/"
+          cp "README.md" "${STAGE_DIR}/"
+          cp "LICENSE" "${STAGE_DIR}/"
+
+          # Create compressed tarball
+          tar -czf "${ARCHIVE_BASENAME}.tar.gz" -C /tmp "${ARCHIVE_BASENAME}"
+
+          # Compute SHA-256 checksum
+          sha256sum "${ARCHIVE_BASENAME}.tar.gz" > "${ARCHIVE_BASENAME}.tar.gz.sha256"
+
+          echo "archive=${ARCHIVE_BASENAME}.tar.gz" >> $GITHUB_OUTPUT
+          echo "checksum=${ARCHIVE_BASENAME}.tar.gz.sha256" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.package.outputs.tag }}
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
