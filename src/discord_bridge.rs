@@ -339,12 +339,17 @@ pub fn get_initials(name: &str) -> String {
     }
 }
 
-// Universal client script that integrates directly with Vencord / Equicord / Shelter / Vesktop / Legcord
+// Universal client script that integrates directly with Vencord / Equicord / Shelter / Vesktop / Legcord / Webpack
 const CLIENT_HOOK_JS: &str = r#"
 (() => {
     if (window.__waycordBridge_v1) return;
     window.__waycordBridge_v1 = true;
     console.log("[WayCord Client] Voice overlay bridge hook active");
+
+    function getStore(s) {
+        if (!s) return null;
+        return Array.isArray(s) ? s[0] : s;
+    }
 
     function getDiscordModules() {
         const vc = window.Vencord || window.Equicord;
@@ -363,17 +368,57 @@ const CLIENT_HOOK_JS: &str = r#"
         }
 
         if (window.shelter?.flux?.dispatcher && window.shelter?.flux?.stores) {
-            const stores = typeof window.shelter.flux.stores === 'function' ? window.shelter.flux.stores() : window.shelter.flux.stores;
-            if (stores?.VoiceStateStore && stores?.SelectedChannelStore && stores?.ChannelStore && stores?.UserStore) {
-                return {
-                    Dispatcher: window.shelter.flux.dispatcher,
-                    VoiceStateStore: stores.VoiceStateStore,
-                    SelectedChannelStore: stores.SelectedChannelStore,
-                    ChannelStore: stores.ChannelStore,
-                    UserStore: stores.UserStore,
-                };
-            }
+            try {
+                const stores = typeof window.shelter.flux.stores === 'function' ? window.shelter.flux.stores() : window.shelter.flux.stores;
+                const vss = getStore(stores?.VoiceStateStore);
+                const scs = getStore(stores?.SelectedChannelStore);
+                const cs = getStore(stores?.ChannelStore);
+                const us = getStore(stores?.UserStore);
+                if (vss && scs && cs && us) {
+                    return {
+                        Dispatcher: window.shelter.flux.dispatcher,
+                        VoiceStateStore: vss,
+                        SelectedChannelStore: scs,
+                        ChannelStore: cs,
+                        UserStore: us,
+                    };
+                }
+            } catch(e) {}
         }
+
+        if (window.webpackChunkdiscord_app) {
+            try {
+                let req;
+                window.webpackChunkdiscord_app.push([[Symbol("waycord")], {}, (r) => { req = r; }]);
+                if (req?.c) {
+                    let Dispatcher, VoiceStateStore, SelectedChannelStore, ChannelStore, UserStore;
+                    for (const id in req.c) {
+                        const m = req.c[id]?.exports;
+                        if (!m) continue;
+                        const target = m.default || m;
+                        if (!Dispatcher && target.dispatch && target.subscribe && target.register) {
+                            Dispatcher = target;
+                        }
+                        if (!VoiceStateStore && typeof target.getVoiceStatesForChannel === 'function') {
+                            VoiceStateStore = target;
+                        }
+                        if (!SelectedChannelStore && typeof target.getVoiceChannelId === 'function') {
+                            SelectedChannelStore = target;
+                        }
+                        if (!ChannelStore && typeof target.getChannel === 'function' && typeof target.hasChannel === 'function') {
+                            ChannelStore = target;
+                        }
+                        if (!UserStore && typeof target.getCurrentUser === 'function' && typeof target.getUser === 'function') {
+                            UserStore = target;
+                        }
+                    }
+                    if (Dispatcher && VoiceStateStore && SelectedChannelStore && ChannelStore && UserStore) {
+                        return { Dispatcher, VoiceStateStore, SelectedChannelStore, ChannelStore, UserStore };
+                    }
+                }
+            } catch (e) {}
+        }
+
         return null;
     }
 
@@ -406,33 +451,50 @@ const CLIENT_HOOK_JS: &str = r#"
         let hostIdx = 0;
 
         function connect() {
+            if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+                return;
+            }
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+
             try {
+                if (ws) {
+                    ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null;
+                    try { ws.close(); } catch(e) {}
+                    ws = null;
+                }
+
                 const target = hosts[hostIdx % hosts.length];
                 hostIdx++;
                 ws = new WebSocket("ws://" + target);
+
                 ws.onopen = () => {
                     console.log("[WayCord Client] Connected to overlay server (" + target + ")!");
                     sendFullState();
                 };
+
                 ws.onclose = () => {
                     ws = null;
-                    if (!reconnectTimer) {
-                        reconnectTimer = setTimeout(() => {
-                            reconnectTimer = null;
-                            connect();
-                        }, 2000);
-                    }
+                    scheduleReconnect();
                 };
+
                 ws.onerror = () => {
-                    if (ws) ws.close();
+                    // Do not call ws.close(); browser triggers onclose automatically
                 };
             } catch (e) {
-                if (!reconnectTimer) {
-                    reconnectTimer = setTimeout(() => {
-                        reconnectTimer = null;
-                        connect();
-                    }, 2000);
-                }
+                ws = null;
+                scheduleReconnect();
+            }
+        }
+
+        function scheduleReconnect() {
+            if (!reconnectTimer) {
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    connect();
+                }, 2000);
             }
         }
 
@@ -521,6 +583,7 @@ const CLIENT_HOOK_JS: &str = r#"
             Dispatcher.subscribe("CURRENT_USER_UPDATE", () => sendFullState());
         } catch (e) {}
 
+        // Watchdog & heartbeat timer: sends ping or reconnects if dropped
         setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 try {
@@ -529,8 +592,10 @@ const CLIENT_HOOK_JS: &str = r#"
                         current_user: getCurrentUserName()
                     }));
                 } catch(e) {}
+            } else if (!ws || ws.readyState === WebSocket.CLOSED) {
+                connect();
             }
-        }, 10000);
+        }, 4000);
 
         connect();
     }
@@ -622,7 +687,7 @@ pub fn install_legcord_user_plugin(legcord_dir: &Path) {
         println!("✨ WayCord plugin installed into Legcord at {}!", plugin_dir.display());
     }
 
-    // Automatically enable plugin and bypass proxy for localhost in storage/settings.json
+    // Automatically configure Legcord settings: enable plugin, ensure csp is none, and bypass proxy for localhost
     let settings_path = legcord_dir.join("storage/settings.json");
     if settings_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&settings_path) {
@@ -636,6 +701,10 @@ pub fn install_legcord_user_plugin(legcord_dir: &Path) {
                             modified = true;
                             println!("✨ Enabled WayCord plugin in Legcord settings!");
                         }
+                    }
+                    if obj.get("csp") != Some(&serde_json::Value::String("none".to_string())) {
+                        obj.insert("csp".to_string(), serde_json::Value::String("none".to_string()));
+                        modified = true;
                     }
                     if let Some(bypass) = obj.get_mut("proxyBypassRules") {
                         if let Some(s) = bypass.as_str() {
