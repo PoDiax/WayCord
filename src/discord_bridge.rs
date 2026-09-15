@@ -593,10 +593,33 @@ pub fn install_legcord_user_plugin(legcord_dir: &Path) {
   "name": "WayCord Voice Overlay",
   "version": "1.0.0",
   "description": "Discord Voice Overlay Bridge for WayCord",
+  "main": "main.js",
   "renderer": "renderer.js"
 }
 "#;
     let _ = std::fs::write(&manifest_path, manifest_content);
+
+    let main_path = plugin_dir.join("main.js");
+    let main_content = r#"import { session } from "electron";
+
+export function activate(api) {
+    if (api?.logger?.log) {
+        api.logger.log("WayCord main process plugin active - stripping CSP for local overlay");
+    }
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        const headers = details.responseHeaders || {};
+        for (const key of Object.keys(headers)) {
+            if (key.toLowerCase().startsWith("content-security-policy")) {
+                delete headers[key];
+            }
+        }
+        callback({ cancel: false, responseHeaders: headers });
+    });
+}
+
+export default { activate };
+"#;
+    let _ = std::fs::write(&main_path, main_content);
 
     let renderer_path = plugin_dir.join("renderer.js");
     let mut renderer_content = String::from("// === WAYCORD LEGCORD PLUGIN ===\n");
