@@ -601,7 +601,7 @@ pub fn install_legcord_user_plugin(legcord_dir: &Path) {
     let renderer_path = plugin_dir.join("renderer.js");
     let mut renderer_content = String::from("// === WAYCORD LEGCORD PLUGIN ===\n");
     renderer_content.push_str(CLIENT_HOOK_JS);
-    renderer_content.push_str("\n\nexport const activate = () => {};\nexport default { activate };\n");
+    renderer_content.push_str("\n\nif (typeof module !== 'undefined' && module.exports) {\n    module.exports = { activate: () => {} };\n}\n");
     if std::fs::write(&renderer_path, renderer_content).is_ok() {
         println!("✨ WayCord plugin installed into Legcord at {}!", plugin_dir.display());
     }
