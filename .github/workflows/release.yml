@@ -102,23 +102,22 @@ jobs:
           cp "README.md" "${DEB_STAGE}/usr/share/doc/waycord/"
           cp "LICENSE" "${DEB_STAGE}/usr/share/doc/waycord/copyright"
 
-          cat <<EOF > "${DEB_STAGE}/DEBIAN/control"
-Package: waycord
-Version: ${PKG_VER}
-Section: net
-Priority: optional
-Architecture: amd64
-Maintainer: PoDiax <pd@pdx.ovh>
-Depends: libx11-6, libfontconfig1, libssl3 | libssl1.1
-Description: Lightweight Discord voice overlay for Linux
- WayCord is a clean, GPU-accelerated Discord voice overlay for Linux and
- Wayland compositors (Hyprland, Sway, KDE, GNOME, etc.).
-EOF
+          printf "%s\n" \
+            "Package: waycord" \
+            "Version: ${PKG_VER}" \
+            "Section: net" \
+            "Priority: optional" \
+            "Architecture: amd64" \
+            "Maintainer: PoDiax <pd@pdx.ovh>" \
+            "Depends: libx11-6, libfontconfig1, libssl3 | libssl1.1" \
+            "Description: Lightweight Discord voice overlay for Linux" \
+            " WayCord is a clean, GPU-accelerated Discord voice overlay for Linux and" \
+            " Wayland compositors (Hyprland, Sway, KDE, GNOME, etc.)." \
+            > "${DEB_STAGE}/DEBIAN/control"
 
           dpkg-deb --build --root-owner-group "${DEB_STAGE}" "${DEB_NAME}"
           sha256sum "${DEB_NAME}" > "${DEB_NAME}.sha256"
 
-          # 3. Package AppImage (Universal Linux standalone executable)
           APPIMAGE_NAME="WayCord-${TAG}-x86_64.AppImage"
           APPDIR="/tmp/waycord-appdir"
           rm -rf "${APPDIR}"
@@ -136,14 +135,14 @@ EOF
           cp "assets/waycord.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
           cp "assets/waycord.svg" "${APPDIR}/usr/share/icons/hicolor/scalable/apps/"
 
-          cat << 'EOF' > "${APPDIR}/AppRun"
-#!/bin/sh
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-export PATH="${HERE}/usr/bin:${PATH}"
-export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-exec "${HERE}/usr/bin/waycord" "$@"
-EOF
+          printf "%s\n" \
+            '#!/bin/sh' \
+            'SELF=$(readlink -f "$0")' \
+            'HERE=${SELF%/*}' \
+            'export PATH="${HERE}/usr/bin:${PATH}"' \
+            'export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"' \
+            'exec "${HERE}/usr/bin/waycord" "$@"' \
+            > "${APPDIR}/AppRun"
           chmod +x "${APPDIR}/AppRun"
 
           curl -fsSL -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
