@@ -309,7 +309,14 @@ pub fn render_bubble_overlay(
                     let av_size = config.avatar_size;
                     let radius = av_size / 2.0;
                     let v_space = ((av_size - 18.0) / 2.0).max(0.0f32);
-                    ui.horizontal(|ui| {
+                    let resp = ui.horizontal(|ui| {
+                        if is_right_side {
+                            let row_id = ui.make_persistent_id(format!("bubble_row_{}", user.id));
+                            if let Some(w) = ui.data(|d| d.get_temp::<f32>(row_id)) {
+                                let pad = (ui.available_width() - w).max(0.0);
+                                ui.add_space(pad);
+                            }
+                        }
                         if is_right_side {
                             if user.is_speaking && config.show_names {
                                 ui.vertical(|ui| {
@@ -422,6 +429,10 @@ pub fn render_bubble_overlay(
                             }
                         }
                     });
+                    if is_right_side {
+                        let row_id = ui.make_persistent_id(format!("bubble_row_{}", user.id));
+                        ui.data_mut(|d| d.insert_temp(row_id, resp.response.rect.width()));
+                    }
                     ui.add_space(3.0);
                 }
             }

@@ -91,6 +91,24 @@ yay -S waycord-bin
 yay -S waycord-git
 ```
 
+### Debian / Ubuntu / Linux Mint (`.deb`)
+
+Download the latest `.deb` package from [GitHub Releases](https://github.com/podiax/waycord/releases) and install it:
+
+```bash
+# Install via apt (automatically resolves system dependencies):
+sudo apt install ./waycord_*_amd64.deb
+```
+
+### AppImage (Universal Linux)
+
+Download the portable `WayCord-v*-x86_64.AppImage` from [GitHub Releases](https://github.com/podiax/waycord/releases) — run without installing:
+
+```bash
+chmod +x WayCord-*.AppImage
+./WayCord-*.AppImage
+```
+
 ### GitHub Releases (Pre-compiled Tarball)
 
 Pre-built binaries with desktop integration files and checksums are automatically generated for every release:

@@ -1,3 +1,4 @@
+pub mod autostart;
 pub mod avatar_cache;
 pub mod discord_bridge;
 pub mod overlay_window;

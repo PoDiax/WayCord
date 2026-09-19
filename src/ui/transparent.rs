@@ -169,61 +169,77 @@ pub fn render_transparent_overlay(
                             (160.0 + pulse * 95.0) as u8,
                         );
 
-                        egui::Frame::new()
-                            .fill(tint_bg)
-                            .stroke(Stroke::new(
-                                1.0,
-                                Color32::from_rgba_premultiplied(250, 180, 50, 130),
-                            ))
-                            .corner_radius(CornerRadius::same(((av_size + 8.0) / 2.0).round() as u8))
-                            .inner_margin(Margin::symmetric(8, 5))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    let dot_size = 12.0f32;
-                                    let v_space = ((dot_size - font_size) / 2.0).max(0.0f32);
-                                    if is_right_side {
-                                        ui.vertical(|ui| {
-                                            ui.add_space(v_space);
-                                            ui.label(
-                                                egui::RichText::new(channel_name)
-                                                    .size(font_size)
-                                                    .strong()
-                                                    .color(Color32::from_gray(230)),
-                                            );
-                                        });
-                                        ui.add_space(2.0);
-                                        let (rect, _) = ui.allocate_exact_size(
-                                            Vec2::splat(dot_size),
-                                            egui::Sense::hover(),
-                                        );
-                                        ui.painter().circle_filled(
-                                            rect.center(),
-                                            3.5 + pulse * 1.0,
-                                            dot_color,
-                                        );
-                                    } else {
-                                        let (rect, _) = ui.allocate_exact_size(
-                                            Vec2::splat(dot_size),
-                                            egui::Sense::hover(),
-                                        );
-                                        ui.painter().circle_filled(
-                                            rect.center(),
-                                            3.5 + pulse * 1.0,
-                                            dot_color,
-                                        );
-                                        ui.add_space(2.0);
-                                        ui.vertical(|ui| {
-                                            ui.add_space(v_space);
-                                            ui.label(
-                                                egui::RichText::new(channel_name)
-                                                    .size(font_size)
-                                                    .strong()
-                                                    .color(Color32::from_gray(230)),
-                                            );
-                                        });
-                                    }
+                        ui.horizontal(|ui| {
+                            let pill_id = ui.make_persistent_id("trans_channel_status_pill");
+                            if is_right_side {
+                                let w = ui.data(|d| d.get_temp::<f32>(pill_id)).unwrap_or_else(|| {
+                                    let ch_len = channel_name.chars().count() as f32;
+                                    ch_len * (font_size * 0.6) + 40.0
                                 });
-                            });
+                                let pad = (ui.available_width() - w).max(0.0);
+                                ui.add_space(pad);
+                            }
+
+                            let f = egui::Frame::new()
+                                .fill(tint_bg)
+                                .stroke(Stroke::new(
+                                    1.0,
+                                    Color32::from_rgba_premultiplied(250, 180, 50, 130),
+                                ))
+                                .corner_radius(CornerRadius::same(((av_size + 8.0) / 2.0).round() as u8))
+                                .inner_margin(Margin::symmetric(8, 5))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        let dot_size = 12.0f32;
+                                        let v_space = ((dot_size - font_size) / 2.0).max(0.0f32);
+                                        if is_right_side {
+                                            ui.vertical(|ui| {
+                                                ui.add_space(v_space);
+                                                ui.label(
+                                                    egui::RichText::new(channel_name)
+                                                        .size(font_size)
+                                                        .strong()
+                                                        .color(Color32::from_gray(230)),
+                                                );
+                                            });
+                                            ui.add_space(2.0);
+                                            let (rect, _) = ui.allocate_exact_size(
+                                                Vec2::splat(dot_size),
+                                                egui::Sense::hover(),
+                                            );
+                                            ui.painter().circle_filled(
+                                                rect.center(),
+                                                3.5 + pulse * 1.0,
+                                                dot_color,
+                                            );
+                                        } else {
+                                            let (rect, _) = ui.allocate_exact_size(
+                                                Vec2::splat(dot_size),
+                                                egui::Sense::hover(),
+                                            );
+                                            ui.painter().circle_filled(
+                                                rect.center(),
+                                                3.5 + pulse * 1.0,
+                                                dot_color,
+                                            );
+                                            ui.add_space(2.0);
+                                            ui.vertical(|ui| {
+                                                ui.add_space(v_space);
+                                                ui.label(
+                                                    egui::RichText::new(channel_name)
+                                                        .size(font_size)
+                                                        .strong()
+                                                        .color(Color32::from_gray(230)),
+                                                );
+                                            });
+                                        }
+                                    });
+                                });
+
+                            if is_right_side {
+                                ui.data_mut(|d| d.insert_temp(pill_id, f.response.rect.width()));
+                            }
+                        });
                     } else {
                         let tint_bg = Color32::from_rgba_unmultiplied(
                             10,
@@ -233,66 +249,81 @@ pub fn render_transparent_overlay(
                         );
                         let dot_color = Color32::from_rgb(35, 165, 90);
 
-                        egui::Frame::new()
-                            .fill(tint_bg)
-                            .stroke(Stroke::new(
-                                1.0,
-                                Color32::from_rgba_premultiplied(35, 165, 90, 130),
-                            ))
-                            .corner_radius(CornerRadius::same(((av_size + 8.0) / 2.0).round() as u8))
-                            .inner_margin(Margin::symmetric(8, 5))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    let dot_size = 12.0f32;
-                                    let v_space = ((dot_size - font_size) / 2.0).max(0.0f32);
-                                    if is_right_side {
-                                        ui.vertical(|ui| {
-                                            ui.add_space(v_space);
-                                            ui.label(
-                                                egui::RichText::new(channel_name)
-                                                    .size(font_size)
-                                                    .strong()
-                                                    .color(Color32::from_gray(230)),
-                                            );
-                                        });
-                                        ui.add_space(2.0);
-                                        let (rect, _) = ui.allocate_exact_size(
-                                            Vec2::splat(dot_size),
-                                            egui::Sense::hover(),
-                                        );
-                                        ui.painter().circle_filled(
-                                            rect.center(),
-                                            4.0,
-                                            dot_color,
-                                        );
-                                    } else {
-                                        let (rect, _) = ui.allocate_exact_size(
-                                            Vec2::splat(dot_size),
-                                            egui::Sense::hover(),
-                                        );
-                                        ui.painter().circle_filled(
-                                            rect.center(),
-                                            4.0,
-                                            dot_color,
-                                        );
-                                        ui.add_space(2.0);
-                                        ui.vertical(|ui| {
-                                            ui.add_space(v_space);
-                                            ui.label(
-                                                egui::RichText::new(channel_name)
-                                                    .size(font_size)
-                                                    .strong()
-                                                    .color(Color32::from_gray(230)),
-                                            );
-                                        });
-                                    }
+                        ui.horizontal(|ui| {
+                            let pill_id = ui.make_persistent_id("trans_channel_status_pill");
+                            if is_right_side {
+                                let w = ui.data(|d| d.get_temp::<f32>(pill_id)).unwrap_or_else(|| {
+                                    let ch_len = channel_name.chars().count() as f32;
+                                    ch_len * (font_size * 0.6) + 40.0
                                 });
-                            });
+                                let pad = (ui.available_width() - w).max(0.0);
+                                ui.add_space(pad);
+                            }
+
+                            let f = egui::Frame::new()
+                                .fill(tint_bg)
+                                .stroke(Stroke::new(
+                                    1.0,
+                                    Color32::from_rgba_premultiplied(35, 165, 90, 130),
+                                ))
+                                .corner_radius(CornerRadius::same(((av_size + 8.0) / 2.0).round() as u8))
+                                .inner_margin(Margin::symmetric(8, 5))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        let dot_size = 12.0f32;
+                                        let v_space = ((dot_size - font_size) / 2.0).max(0.0f32);
+                                        if is_right_side {
+                                            ui.vertical(|ui| {
+                                                ui.add_space(v_space);
+                                                ui.label(
+                                                    egui::RichText::new(channel_name)
+                                                        .size(font_size)
+                                                        .strong()
+                                                        .color(Color32::from_gray(230)),
+                                                );
+                                            });
+                                            ui.add_space(2.0);
+                                            let (rect, _) = ui.allocate_exact_size(
+                                                Vec2::splat(dot_size),
+                                                egui::Sense::hover(),
+                                            );
+                                            ui.painter().circle_filled(
+                                                rect.center(),
+                                                4.0,
+                                                dot_color,
+                                            );
+                                        } else {
+                                            let (rect, _) = ui.allocate_exact_size(
+                                                Vec2::splat(dot_size),
+                                                egui::Sense::hover(),
+                                            );
+                                            ui.painter().circle_filled(
+                                                rect.center(),
+                                                4.0,
+                                                dot_color,
+                                            );
+                                            ui.add_space(2.0);
+                                            ui.vertical(|ui| {
+                                                ui.add_space(v_space);
+                                                ui.label(
+                                                    egui::RichText::new(channel_name)
+                                                        .size(font_size)
+                                                        .strong()
+                                                        .color(Color32::from_gray(230)),
+                                                );
+                                            });
+                                        }
+                                    });
+                                });
+
+                            if is_right_side {
+                                ui.data_mut(|d| d.insert_temp(pill_id, f.response.rect.width()));
+                            }
+                        });
                     }
                 }
             } else {
                 for user in users_to_display {
-                    // Slight tint behind username and avatar
                     let tint_bg = Color32::from_rgba_unmultiplied(
                         10,
                         10,
@@ -300,21 +331,34 @@ pub fn render_transparent_overlay(
                         config.bg_tint_alpha,
                     );
 
-                    egui::Frame::new()
-                        .fill(tint_bg)
-                        .stroke(if user.is_speaking {
-                            Stroke::new(
-                                1.0,
-                                Color32::from_rgba_premultiplied(
-                                    35, 165, 90, 160,
-                                ),
-                            )
-                        } else {
-                            Stroke::NONE
-                        })
-                        .corner_radius(CornerRadius::same(((av_size + 8.0) / 2.0).round() as u8))
-                        .inner_margin(Margin::symmetric(6, 4))
-                        .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let pill_id = ui.make_persistent_id(format!("trans_pill_{}", user.id));
+                        if is_right_side {
+                            let w = ui.data(|d| d.get_temp::<f32>(pill_id)).unwrap_or_else(|| {
+                                let name_len = user.name.chars().count() as f32;
+                                let name_est = if config.show_names { name_len * (font_size * 0.55) + 4.0 } else { 0.0 };
+                                let badge_est = if user.is_deafened || user.is_muted { 36.0 } else { 0.0 };
+                                av_size + name_est + badge_est + 12.0
+                            });
+                            let pad = (ui.available_width() - w).max(0.0);
+                            ui.add_space(pad);
+                        }
+
+                        let f = egui::Frame::new()
+                            .fill(tint_bg)
+                            .stroke(if user.is_speaking {
+                                Stroke::new(
+                                    1.0,
+                                    Color32::from_rgba_premultiplied(
+                                        35, 165, 90, 160,
+                                    ),
+                                )
+                            } else {
+                                Stroke::NONE
+                            })
+                            .corner_radius(CornerRadius::same(((av_size + 8.0) / 2.0).round() as u8))
+                            .inner_margin(Margin::symmetric(6, 4))
+                            .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 let name_color = if user.is_speaking {
                                     Color32::WHITE
@@ -523,11 +567,16 @@ pub fn render_transparent_overlay(
                             });
                         });
 
+                        if is_right_side {
+                            let pill_id = ui.make_persistent_id(format!("trans_pill_{}", user.id));
+                            ui.data_mut(|d| d.insert_temp(pill_id, f.response.rect.width()));
+                        }
+                    });
+
                     ui.add_space(3.0);
                 }
             }
 
-            // Bottom resize corner if Alt held
             if alt_held {
                 ui.horizontal(|ui| {
                     if is_right_side {

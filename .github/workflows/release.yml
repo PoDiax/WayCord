@@ -74,8 +74,89 @@ jobs:
           # Compute SHA-256 checksum
           sha256sum "${ARCHIVE_BASENAME}.tar.gz" > "${ARCHIVE_BASENAME}.tar.gz.sha256"
 
+          # 2. Package Debian (.deb) package for Ubuntu / Mint / Debian
+          PKG_VER="${TAG#v}"
+          DEB_NAME="waycord_${PKG_VER}_amd64.deb"
+          DEB_STAGE="/tmp/waycord-deb-stage"
+          rm -rf "${DEB_STAGE}"
+          mkdir -p "${DEB_STAGE}/DEBIAN"
+          mkdir -p "${DEB_STAGE}/usr/bin"
+          mkdir -p "${DEB_STAGE}/usr/share/applications"
+          mkdir -p "${DEB_STAGE}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${DEB_STAGE}/usr/share/icons/hicolor/scalable/apps"
+          mkdir -p "${DEB_STAGE}/usr/share/doc/waycord"
+
+          cp "target/release/waycord" "${DEB_STAGE}/usr/bin/"
+          chmod 755 "${DEB_STAGE}/usr/bin/waycord"
+          strip -s "${DEB_STAGE}/usr/bin/waycord"
+
+          cp "assets/waycord.desktop" "${DEB_STAGE}/usr/share/applications/"
+          chmod 644 "${DEB_STAGE}/usr/share/applications/waycord.desktop"
+
+          cp "assets/waycord.png" "${DEB_STAGE}/usr/share/icons/hicolor/256x256/apps/"
+          chmod 644 "${DEB_STAGE}/usr/share/icons/hicolor/256x256/apps/waycord.png"
+
+          cp "assets/waycord.svg" "${DEB_STAGE}/usr/share/icons/hicolor/scalable/apps/"
+          chmod 644 "${DEB_STAGE}/usr/share/icons/hicolor/scalable/apps/waycord.svg"
+
+          cp "README.md" "${DEB_STAGE}/usr/share/doc/waycord/"
+          cp "LICENSE" "${DEB_STAGE}/usr/share/doc/waycord/copyright"
+
+          cat <<EOF > "${DEB_STAGE}/DEBIAN/control"
+Package: waycord
+Version: ${PKG_VER}
+Section: net
+Priority: optional
+Architecture: amd64
+Maintainer: PoDiax <pd@pdx.ovh>
+Depends: libx11-6, libfontconfig1, libssl3 | libssl1.1
+Description: Lightweight Discord voice overlay for Linux
+ WayCord is a clean, GPU-accelerated Discord voice overlay for Linux and
+ Wayland compositors (Hyprland, Sway, KDE, GNOME, etc.).
+EOF
+
+          dpkg-deb --build --root-owner-group "${DEB_STAGE}" "${DEB_NAME}"
+          sha256sum "${DEB_NAME}" > "${DEB_NAME}.sha256"
+
+          # 3. Package AppImage (Universal Linux standalone executable)
+          APPIMAGE_NAME="WayCord-${TAG}-x86_64.AppImage"
+          APPDIR="/tmp/waycord-appdir"
+          rm -rf "${APPDIR}"
+          mkdir -p "${APPDIR}/usr/bin"
+          mkdir -p "${APPDIR}/usr/share/applications"
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/scalable/apps"
+
+          cp "target/release/waycord" "${APPDIR}/usr/bin/"
+          chmod 755 "${APPDIR}/usr/bin/waycord"
+
+          cp "assets/waycord.desktop" "${APPDIR}/"
+          cp "assets/waycord.desktop" "${APPDIR}/usr/share/applications/"
+          cp "assets/waycord.png" "${APPDIR}/"
+          cp "assets/waycord.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/"
+          cp "assets/waycord.svg" "${APPDIR}/usr/share/icons/hicolor/scalable/apps/"
+
+          cat << 'EOF' > "${APPDIR}/AppRun"
+#!/bin/sh
+SELF=$(readlink -f "$0")
+HERE=${SELF%/*}
+export PATH="${HERE}/usr/bin:${PATH}"
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+exec "${HERE}/usr/bin/waycord" "$@"
+EOF
+          chmod +x "${APPDIR}/AppRun"
+
+          curl -fsSL -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+          ARCH=x86_64 /tmp/appimagetool --appimage-extract-and-run "${APPDIR}" "${APPIMAGE_NAME}"
+          sha256sum "${APPIMAGE_NAME}" > "${APPIMAGE_NAME}.sha256"
+
           echo "archive=${ARCHIVE_BASENAME}.tar.gz" >> $GITHUB_OUTPUT
           echo "checksum=${ARCHIVE_BASENAME}.tar.gz.sha256" >> $GITHUB_OUTPUT
+          echo "deb=${DEB_NAME}" >> $GITHUB_OUTPUT
+          echo "deb_checksum=${DEB_NAME}.sha256" >> $GITHUB_OUTPUT
+          echo "appimage=${APPIMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "appimage_checksum=${APPIMAGE_NAME}.sha256" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
       - name: Publish GitHub Release
@@ -85,6 +166,10 @@ jobs:
           files: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.checksum }}
+            ${{ steps.package.outputs.deb }}
+            ${{ steps.package.outputs.deb_checksum }}
+            ${{ steps.package.outputs.appimage }}
+            ${{ steps.package.outputs.appimage_checksum }}
           draft: false
           prerelease: false
           generate_release_notes: true

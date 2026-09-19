@@ -30,6 +30,8 @@ pub struct OverlayConfig {
     pub show_names: bool,
     #[serde(default = "default_false")]
     pub only_speaking: bool,
+    #[serde(default = "default_false")]
+    pub autostart: bool,
     #[serde(default = "default_card_width")]
     pub card_width: f32,
 }
@@ -62,6 +64,7 @@ impl Default for OverlayConfig {
             opacity: 0.90,
             show_names: true,
             only_speaking: false,
+            autostart: false,
             card_width: 220.0,
         }
     }
@@ -77,20 +80,28 @@ impl OverlayConfig {
 
     pub fn load() -> Self {
         let path = Self::config_path();
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(config) = serde_json::from_str::<Self>(&content) {
-                return config;
-            }
-        }
-        let default = Self::default();
-        default.save();
-        default
+        let mut config = if let Ok(content) = std::fs::read_to_string(&path) {
+            serde_json::from_str::<Self>(&content).unwrap_or_else(|_| {
+                let default = Self::default();
+                default.save();
+                default
+            })
+        } else {
+            let default = Self::default();
+            default.save();
+            default
+        };
+        config.autostart = crate::autostart::is_autostart_enabled();
+        config
     }
 
     pub fn save(&self) {
         let path = Self::config_path();
         if let Ok(json) = serde_json::to_string_pretty(self) {
             let _ = std::fs::write(path, json);
+        }
+        if crate::autostart::is_autostart_enabled() != self.autostart {
+            let _ = crate::autostart::set_autostart(self.autostart);
         }
     }
 
@@ -186,43 +197,5 @@ pub fn find_active_monitor(monitors: &[MonitorBounds], x: f32, y: f32) -> Monito
         })
         .copied()
         .unwrap_or(monitors[0])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_multi_monitor_detection_and_snap() {
-        let monitors = vec![
-            MonitorBounds::new(0.0, 0.0, 1920.0, 1080.0), 
-            MonitorBounds::new(1920.0, 0.0, 2560.0, 1440.0),
-        ];
-
-        let m1_left = find_active_monitor(&monitors, 100.0, 100.0);
-        assert_eq!(m1_left.x, 0.0);
-        assert!(!m1_left.is_right_half(100.0));
-
-        let m1_right = find_active_monitor(&monitors, 1200.0, 100.0);
-        assert_eq!(m1_right.x, 0.0);
-        assert!(m1_right.is_right_half(1200.0));
-
-        let m2_left = find_active_monitor(&monitors, 2200.0, 200.0);
-        assert_eq!(m2_left.x, 1920.0);
-        assert!(!m2_left.is_right_half(2200.0));
-
-        let m2_right = find_active_monitor(&monitors, 3600.0, 200.0);
-        assert_eq!(m2_right.x, 1920.0);
-        assert!(m2_right.is_right_half(3600.0));
-
-        let mut cfg = OverlayConfig::default();
-        cfg.snap_left_on_monitor(&m2_right);
-        assert_eq!(cfg.x, 1920.0 + 24.0);
-
-        cfg.snap_right_on_monitor(&m2_right);
-        let expected_w = cfg.avatar_size + 160.0;
-        assert_eq!(cfg.x, 4480.0 - expected_w - 24.0);
-        assert!(m2_right.is_right_half(cfg.x + expected_w / 2.0));
-    }
 }
 

@@ -61,6 +61,46 @@ impl TrayState {
     }
 }
 
+pub fn build_status_label(
+    connected: bool,
+    ch: &str,
+    current_user: Option<&str>,
+    client_info: &crate::discord_bridge::DiscordClientInfo,
+) -> String {
+    if connected {
+        let user_tag = current_user.unwrap_or("");
+        if !ch.is_empty() && !ch.starts_with("Connecting") && !ch.starts_with("Connected to Discord") {
+            if !user_tag.is_empty() {
+                format!("🟢 {} ({})", user_tag, ch)
+            } else {
+                format!("🟢 Call: {}", ch)
+            }
+        } else if !user_tag.is_empty() {
+            format!("🟢 Connected as {}", user_tag)
+        } else {
+            "🟢 Connected to Discord".to_string()
+        }
+    } else if client_info.vesktop_running {
+        let user_tag = current_user.unwrap_or("");
+        if !user_tag.is_empty() {
+            format!("🟢 Connected as {}", user_tag)
+        } else {
+            "🟢 Vesktop Active (Idle)".to_string()
+        }
+    } else if client_info.legcord_running {
+        let user_tag = current_user.unwrap_or("");
+        if !user_tag.is_empty() {
+            format!("🟢 Connected as {}", user_tag)
+        } else {
+            "🟢 Legcord Active (Idle)".to_string()
+        }
+    } else if client_info.stock_discord_running {
+        "⚠️ Official Discord (Unsupported)".to_string()
+    } else {
+        "🟠 Discord: Waiting...".to_string()
+    }
+}
+
 pub struct WayCordTray {
     pub state: TrayState,
 }
@@ -101,27 +141,17 @@ impl ksni::Tray for WayCordTray {
             .store(true, Ordering::SeqCst);
     }
 
+    fn menu_about_to_show(&mut self) {
+
+    }
+
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let connected = self.state.discord_connected.load(Ordering::Relaxed);
         let ch = self.state.channel_name.read().unwrap().clone();
         let current_user = self.state.current_user.read().unwrap().clone();
+        let client_info = crate::discord_bridge::DiscordClientInfo::detect();
 
-        let status_label = if connected {
-            let user_tag = current_user.as_deref().unwrap_or("");
-            if !ch.is_empty() && !ch.starts_with("Connecting") && !ch.starts_with("Connected to Discord") {
-                if !user_tag.is_empty() {
-                    format!("🟢 {} ({})", user_tag, ch)
-                } else {
-                    format!("🟢 Call: {}", ch)
-                }
-            } else if !user_tag.is_empty() {
-                format!("🟢 Connected as {}", user_tag)
-            } else {
-                "🟢 Connected to Discord".to_string()
-            }
-        } else {
-            "🟠 Discord: Waiting...".to_string()
-        };
+        let status_label = build_status_label(connected, &ch, current_user.as_deref(), &client_info);
 
         let visible = self.state.is_visible.load(Ordering::Relaxed);
         let vis_label = if visible {
@@ -144,6 +174,13 @@ impl ksni::Tray for WayCordTray {
             "Show Only Speaking"
         };
 
+        let autostart_enabled = crate::autostart::is_autostart_enabled();
+        let autostart_label = if autostart_enabled {
+            "✓ Start on Login"
+        } else {
+            "Start on Login"
+        };
+
         let mut items: Vec<MenuItem<Self>> = vec![
             StandardItem {
                 label: format!("WayCord v{}", env!("CARGO_PKG_VERSION")),
@@ -159,7 +196,52 @@ impl ksni::Tray for WayCordTray {
             .into(),
         ];
 
-        if !connected {
+        let is_any_client_present = connected
+            || client_info.vesktop_running
+            || client_info.vesktop_installed
+            || client_info.legcord_running
+            || client_info.legcord_installed;
+
+        if client_info.stock_discord_running && !connected {
+            items.push(MenuItem::Separator);
+            if client_info.vesktop_installed {
+                items.push(
+                    StandardItem {
+                        label: "▶ Launch Vesktop (Supported)".into(),
+                        activate: Box::new(|_| {
+                            let _ = std::process::Command::new("vesktop").spawn();
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            } else {
+                items.push(
+                    StandardItem {
+                        label: "Install Vesktop (Recommended)".into(),
+                        activate: Box::new(|_| {
+                            let _ = std::process::Command::new("xdg-open")
+                                .arg("https://vesktop.dev")
+                                .spawn();
+                        }),
+                        ..Default::default()
+                    }
+                    .into(),
+                );
+            }
+            items.push(
+                StandardItem {
+                    label: "Patch Discord with Vencord".into(),
+                    activate: Box::new(|_| {
+                        let _ = std::process::Command::new("xdg-open")
+                            .arg("https://vencord.dev/download")
+                            .spawn();
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+            );
+        } else if !is_any_client_present {
             items.push(MenuItem::Separator);
             items.push(
                 StandardItem {
@@ -214,6 +296,15 @@ impl ksni::Tray for WayCordTray {
             }
             .into(),
             StandardItem {
+                label: autostart_label.into(),
+                activate: Box::new(move |_| {
+                    let current = crate::autostart::is_autostart_enabled();
+                    let _ = crate::autostart::set_autostart(!current);
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
                 label: "Reset Position".into(),
                 activate: Box::new(move |_| {
                     reset_pos_atomic.store(true, Ordering::SeqCst);
@@ -244,3 +335,4 @@ impl ksni::Tray for WayCordTray {
         items
     }
 }
+

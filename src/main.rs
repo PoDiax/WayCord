@@ -246,13 +246,13 @@ impl UiPreviewApp {
         ui.horizontal(|ui| {
             if ui.button("Launch Transparent Overlay (Click-Through)").clicked() {
                 let _ = std::process::Command::new("cargo")
-                    .args(["run", "--bin", "overlay"])
+                    .args(["run", "--bin", "waycord"])
                     .spawn();
             }
 
             if ui.button("Launch Interactive Overlay (For Testing)").clicked() {
                 let _ = std::process::Command::new("cargo")
-                    .args(["run", "--bin", "overlay", "--", "--interactive"])
+                    .args(["run", "--bin", "waycord", "--", "--interactive"])
                     .spawn();
             }
         });

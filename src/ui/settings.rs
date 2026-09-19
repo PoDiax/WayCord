@@ -49,7 +49,7 @@ pub fn render_settings_window(
                     ui.image((tex.id(), Vec2::new(24.0, 24.0)));
                 }
                 ui.heading(egui::RichText::new("WayCord").size(17.0).color(palette.accent).strong());
-                ui.label(egui::RichText::new("Overlay Settings").size(13.0).color(palette.text_muted));
+                ui.label(egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).size(11.5).color(palette.text_muted));
             });
 
             ui.add_space(4.0);
@@ -98,11 +98,18 @@ pub fn render_settings_window(
             ui.add_space(4.0);
 
             ui.label(
-                egui::RichText::new("Voice Options")
+                egui::RichText::new("General & Voice Options")
                     .size(13.0)
                     .color(palette.text_primary)
                     .strong(),
             );
+            if ui
+                .checkbox(&mut config.autostart, "Start WayCord on login")
+                .on_hover_text("Automatically start WayCord on system startup via XDG autostart")
+                .changed()
+            {
+                config.save();
+            }
             if ui
                 .checkbox(&mut config.only_speaking, "Show only speaking users")
                 .changed()

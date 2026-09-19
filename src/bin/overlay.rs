@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use waycord::{
     ThemePalette, VoiceUser, apply_theme,
-    discord_bridge::DiscordBridge,
+    discord_bridge::{DiscordBridge, DiscordClientInfo},
     overlay_window::OverlayWindow,
     presets::OverlayConfig,
     render_voice_overlay,
@@ -39,7 +39,12 @@ struct OverlayApp {
     screen_height: f32,
     monitors: Vec<waycord::presets::MonitorBounds>,
     tray_state: waycord::tray::TrayState,
-    _tray_handle: Option<ksni::blocking::Handle<waycord::tray::WayCordTray>>,
+    tray_handle: Option<ksni::blocking::Handle<waycord::tray::WayCordTray>>,
+    last_tray_connected: bool,
+    last_tray_channel: String,
+    last_tray_user: Option<String>,
+    last_tray_visible: bool,
+    last_tray_only_speaking: bool,
     is_visible: bool,
     banner_state: BannerState,
 }
@@ -50,8 +55,9 @@ impl OverlayApp {
         let palette = ThemePalette::from_kind(config.theme);
         let tracker = X11Tracker::new();
         let bridge = DiscordBridge::start();
+        let only_speaking = config.only_speaking;
         let tray_state = waycord::tray::TrayState::new();
-        tray_state.only_speaking.store(config.only_speaking, std::sync::atomic::Ordering::Relaxed);
+        tray_state.only_speaking.store(only_speaking, std::sync::atomic::Ordering::Relaxed);
         let tray_handle = tray_state.start_tray();
 
         Self {
@@ -112,7 +118,12 @@ impl OverlayApp {
             screen_height: 1440.0,
             monitors: Vec::new(),
             tray_state,
-            _tray_handle: tray_handle,
+            tray_handle,
+            last_tray_connected: false,
+            last_tray_channel: String::new(),
+            last_tray_user: None,
+            last_tray_visible: true,
+            last_tray_only_speaking: only_speaking,
             is_visible: true,
             banner_state: BannerState::Connecting,
         }
@@ -261,18 +272,27 @@ impl ApplicationHandler for OverlayApp {
 
                     match self.banner_state {
                         BannerState::Connecting => {
-                            let dot_count = (elapsed * 2.5) as usize % 4;
-                            let dots = match dot_count {
-                                0 => "",
-                                1 => ".",
-                                2 => "..",
-                                _ => "...",
-                            };
-                            (
-                                Vec::new(),
-                                format!("Connecting to Discord{}", dots),
-                                true,
-                            )
+                            let client_info = DiscordClientInfo::detect();
+                            if !connected && client_info.stock_discord_running {
+                                (
+                                    Vec::new(),
+                                    "Official Discord unsupported - Use Vesktop".to_string(),
+                                    true,
+                                )
+                            } else {
+                                let dot_count = (elapsed * 2.5) as usize % 4;
+                                let dots = match dot_count {
+                                    0 => "",
+                                    1 => ".",
+                                    2 => "..",
+                                    _ => "...",
+                                };
+                                (
+                                    Vec::new(),
+                                    format!("Connecting to Discord{}", dots),
+                                    true,
+                                )
+                            }
                         }
                         BannerState::ConnectedUntil(_) => {
                             (
@@ -292,12 +312,34 @@ impl ApplicationHandler for OverlayApp {
                 }
             };
 
-            self.tray_state.discord_connected.store(connected, std::sync::atomic::Ordering::Relaxed);
-            if let Ok(mut ch) = self.tray_state.channel_name.write() {
-                *ch = channel_title.clone();
-            }
-            if let Ok(mut u) = self.tray_state.current_user.write() {
-                *u = current_user;
+            let tray_connected_changed = self.last_tray_connected != connected;
+            let tray_channel_changed = self.last_tray_channel != channel_title;
+            let tray_user_changed = self.last_tray_user != current_user;
+            let tray_visible_changed = self.last_tray_visible != self.is_visible;
+            let tray_only_speaking_changed = self.last_tray_only_speaking != self.config.only_speaking;
+
+            if tray_connected_changed
+                || tray_channel_changed
+                || tray_user_changed
+                || tray_visible_changed
+                || tray_only_speaking_changed
+            {
+                self.last_tray_connected = connected;
+                self.last_tray_channel = channel_title.clone();
+                self.last_tray_user = current_user.clone();
+                self.last_tray_visible = self.is_visible;
+                self.last_tray_only_speaking = self.config.only_speaking;
+
+                self.tray_state.discord_connected.store(connected, std::sync::atomic::Ordering::Relaxed);
+                if let Ok(mut ch) = self.tray_state.channel_name.write() {
+                    *ch = channel_title.clone();
+                }
+                if let Ok(mut u) = self.tray_state.current_user.write() {
+                    *u = current_user;
+                }
+                if let Some(handle) = &self.tray_handle {
+                    handle.update(|_| ());
+                }
             }
 
             if let Some(overlay) = &mut self.overlay {

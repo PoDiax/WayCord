@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "Vesktop Installation Guide"
+    url: "https://vesktop.dev"
+    about: "Need a Discord client with Vencord & overlay bridge support? Check out Vesktop."
+  - name: "Legcord Installation Guide"
+    url: "https://legcord.app"
+    about: "Lightweight Discord client alternative with Waycord plugin support."

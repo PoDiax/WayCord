@@ -1,0 +1,102 @@
+name: "🐛 Bug Report"
+description: "Report a bug or unexpected behavior in Waycord"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much detail as possible so we can diagnose and resolve it quickly.
+
+        > [!NOTE]
+        > Official Discord (stock desktop client) does not support third-party overlay bridges. Waycord requires **Vesktop** (recommended) or **Legcord** (with Waycord plugin).
+
+  - type: input
+    id: version
+    attributes:
+      label: "Waycord Version"
+      description: "What version of Waycord are you using? (e.g. `v0.1.1` or git commit hash)"
+      placeholder: "e.g. v0.1.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: "Discord Client"
+      description: "Which Discord client are you using?"
+      options:
+        - "Vesktop (Flatpak)"
+        - "Vesktop (Native / Package Manager)"
+        - "Legcord (Flatpak)"
+        - "Legcord (Native / Package Manager)"
+        - "Discord with Vencord patch"
+        - "Official / Stock Discord"
+        - "Other (please specify in description)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: compositor
+    attributes:
+      label: "Wayland Compositor / Desktop Environment"
+      description: "What Wayland compositor or desktop environment are you running?"
+      options:
+        - "Hyprland"
+        - "Sway"
+        - "KDE Plasma (Wayland)"
+        - "GNOME (Wayland)"
+        - "River"
+        - "Cosmic"
+        - "X11 (Not officially supported, but mention here)"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Describe the Bug"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "What went wrong?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "How can we reproduce the behavior?"
+      placeholder: |
+        1. Start Waycord with `./target/release/waycord`
+        2. Join a voice channel in Vesktop
+        3. See error / unexpected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behavior"
+      description: "What did you expect to happen?"
+      placeholder: "The overlay should show voice participants and highlight speaking users."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Terminal Logs / Output"
+      description: "Please paste terminal output from running `waycord` in a terminal."
+      render: shell
+      placeholder: "Terminal logs here..."
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: "Pre-submission Checklist"
+      options:
+        - label: "I am using a supported client (Vesktop, Legcord, or Vencord-patched Discord)."
+          required: false
+        - label: "I have searched existing issues to ensure this is not a duplicate."
+          required: true
